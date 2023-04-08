@@ -25,7 +25,7 @@
  *  alphaNumeric  - checks if value is made from alphabet aharacters and number characters.
  * 
  * 
- *  alphaWithout  - checks if value is made from alphabet characters and not allow special characters.
+ *  alphaWithout  - checks if value is made from alphabet characters or numbers and not allow special characters.
  * 
  * 
  *  confirmed     - checks if there is another field with exact name, but concatenated with _confirmation
@@ -43,9 +43,7 @@
 class Validator {
 
     errorOn = false;
-
     errors = [];
-
 
     /**
      * 
@@ -76,19 +74,33 @@ class Validator {
         }
     }
 
-
+    /**
+     * @private
+     * Iterates over the declared rules and splits them by '|' character.
+     * Extracts every rule and passes it to the 'analiseRule' function
+     * which analyzes the rule for the given value.
+     * 
+     * @returns {void}
+     */
     #validate() {
         this.rulesKeys.forEach(key => {
             let rule = this.rules[key];
             let ruleSplit = rule.split('|');
 
-            this.analiseRule(key, this.values[key], ruleSplit);
+            this.#analiseRule(key, this.values[key], ruleSplit);
             
         });
     }
 
-
-    analiseRule(key, value, ruleSplit) {
+    /**
+     * Analyze a single validation rule for a given key-value pair.
+     *
+     * @private
+     * @param {string} key - The key to validate.
+     * @param {string} value - The value to validate for the given key.
+     * @param {string} ruleSplit - The extracted validation rule to analyze.
+     */
+    #analiseRule(key, value, ruleSplit) {
 
         let assuredRules = this.assureRules(ruleSplit);
         
@@ -113,19 +125,31 @@ class Validator {
                 try {
                     this.ruleExecutor[individualRule](key, value);
                 } catch (error) {
-                    throw error;
+                    throw new Error(`This rule doesn\'t exists | ${individualRule} |`, error);
                 }
             }
         });
     }
 
+    /**
+     * Object containing validation rules to be executed on form fields.
+     * @namespace ruleExecutor
+     * @property {Function} required - Validates whether a field is required and has a value.
+     * @property {Function} min - Validates whether a field has a minimum length.
+     * @property {Function} max - Validates whether a field has a maximum length.
+     * @property {Function} alpha - Validates whether a field has only letters.
+     * @property {Function} numeric - Validates whether a field has only numbers.
+     * @property {Function} alphaNumeric - Validates whether a field has only numbers and letters.
+     * @property {Function} alphaWithout - Validates whether a field contains a certain string.
+     * @property {Function} confirmed - Validates whether a field's value matches a confirmation field.
+     * @property {Function} email - Validates whether a field's value is in a valid email format.
+     */
     ruleExecutor = {
         required: (key, val) => {
             if (val === '' || val === null) this.packError(this.ruleError['required'](key), key);
         },
         min: (key, val, condition) => {
             if (val === undefined || val === '' || val == null) {
-                // this.packError(this.ruleError['min'](key, condition), key);
                 return;
             }
             else
@@ -135,7 +159,6 @@ class Validator {
         },
         max: (key, val, condition) => {
             if (val === undefined || val === ' ' || val == null) {
-                // this.packError(this.ruleError['max'](key, condition), key);
                 return;
             }
             else
@@ -205,7 +228,19 @@ class Validator {
         }
     }
 
-
+    /**
+     * Object containing error messages for various validation rules.
+     * @namespace ruleError
+     * @property {function} required - Error message for required validation rule.
+     * @property {function} min - Error message for minimum length validation rule.
+     * @property {function} max - Error message for maximum length validation rule.
+     * @property {function} alpha - Error message for alphabetic characters only validation rule.
+     * @property {function} numeric - Error message for numeric characters only validation rule.
+     * @property {function} alphaNumeric - Error message for alphanumeric characters only validation rule.
+     * @property {function} alphaWithout - Error message for characters not allowed validation rule.
+     * @property {function} confirmed - Error message for confirmation validation rule.
+     * @property {function} email - Error message for email format validation rule.
+     */
     ruleError = {
         required: (key) => {
             return `The field ${key} is required!`;
@@ -240,7 +275,14 @@ class Validator {
         }
     }
 
-
+    /**
+     * Asynchronously checks for errors in the input values
+     * and returns a Promise with the result.
+     * @async
+     * @function check
+     * @returns {Promise} A Promise that resolves with `true` if there are no errors or rejects
+     * with an object containing grouped error messages if there are errors.
+     */
     check() {
         return new Promise((resolve, reject) => {
             this.errors = JSON.parse(JSON.stringify(this.errors));
@@ -255,7 +297,6 @@ class Validator {
                 let errorName = Object.keys(error)[0];
                 let errorMessage = error[`${errorName}`];
 
-
                 if (!errorsGrouped[errorName]) {
                     errorsGrouped[errorName] = [];
                 }
@@ -267,6 +308,16 @@ class Validator {
         });
     }
 
+    /**
+     * Create a new error object with a specific message and key
+     * and add it to the array of errors in the current instance of the class.
+     * @async
+     * @function packError
+     * @param {string} message - The error message to include in the error object.
+     * @param {string} key - The key to which the error message is related.
+     * 
+     * @returns {Promise<boolean>} - A promise that resolves to true if the error object was successfully added to the array of errors.
+     */
     async packError(message, key) {
 
         return new Promise ((resolved, rejected) => {
@@ -279,15 +330,26 @@ class Validator {
         });
     }
 
-
+    /**
+     * Sanitizes an array of rule strings by removing whitespace and empty rules.
+     * @param {string[]} ruleSplit - An array of rule strings to sanitize.
+     * @returns {string[]} An array of sanitized rule strings.
+     */
     assureRules(ruleSplit) {
-        let assuredRules = ruleSplit.filter(rule => {
-            let trimmed = rule.trim();
-            return trimmed.length > 0;
-        });
+        let sanitizeRules = [];
         
-        return assuredRules;
+        // Iterate every rule and remove white spaces and trim.
+        ruleSplit.filter(rule => {
+            let trimmed  = rule.trim();
+            let noSpaces = trimmed.replace(/\s+/g, '');
+            
+            noSpaces.length > 0 ? sanitizeRules.push(noSpaces) : '';
+
+            return noSpaces.length > 0;
+        });
+
+        return sanitizeRules;
     }
 }
 
-export default Validator;
+module.exports = Validator;
